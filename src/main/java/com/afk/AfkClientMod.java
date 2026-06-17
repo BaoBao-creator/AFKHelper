@@ -141,7 +141,7 @@ public final class AfkClientMod implements ClientModInitializer {
         }
 
         @Override
-        public boolean shouldPause() {
+        public boolean isPauseScreen() {
             return false;
         }
 
