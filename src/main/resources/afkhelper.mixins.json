@@ -10,6 +10,13 @@
 		"requireAnnotations": true
 	},
 	"client": [
-		"GameRendererMixin"
+		"GameRendererMixin",
+		"WorldRendererMixin",
+		"InGameHudMixin",
+		"ParticleManagerMixin",
+		"SoundManagerMixin",
+		"ChunkBuilderMixin",
+		"ClientWorldMixin",
+		"ScreenMixin"
 	]
 }

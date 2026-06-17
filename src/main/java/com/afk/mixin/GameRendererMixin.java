@@ -10,6 +10,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
+    @Inject(method = {"render", "tick", "updateTargetedEntity", "renderWithZoom", "reset", "showFloatingItem"}, at = @At("HEAD"), cancellable = true)
+    private void afkhelper$skipVisualFrameWork(CallbackInfo info) {
+        if (AfkClientMod.isAfkEnabled()) {
+            info.cancel();
+        }
+    }
+
     @Inject(method = "renderWorld", at = @At("HEAD"), cancellable = true)
     private void afkhelper$skipWorldRendering(float tickDelta, long limitTime, MatrixStack matrices, CallbackInfo info) {
         if (AfkClientMod.isAfkEnabled()) {

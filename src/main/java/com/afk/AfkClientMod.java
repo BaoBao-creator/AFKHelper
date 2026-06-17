@@ -2,30 +2,36 @@ package com.afk;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v1.ClientCommandManager;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.command.v1.FabricClientCommandSource;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
+import net.minecraft.client.option.CloudRenderMode;
+import net.minecraft.client.option.GameOptions;
+import net.minecraft.client.option.GraphicsMode;
+import net.minecraft.client.option.ParticlesMode;
+import net.minecraft.client.render.ChunkBuilderMode;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.sound.SoundCategory;
 import net.minecraft.text.LiteralText;
 import net.minecraft.text.Text;
 
 /**
- * Client-side AFK power saver.
- *
- * When enabled, the mod keeps the client connected to multiplayer servers while
- * aggressively reducing local rendering work: it caps foreground FPS to 1,
- * opens a minimal black AFK screen, and the render mixin skips world rendering.
+ * Turns the client into a minimal network keeper while AFK is enabled.
  */
 public final class AfkClientMod implements ClientModInitializer {
-    private static final Text AFK_TITLE = new LiteralText("AFK Helper");
-    private static final Text DISABLE_AFK = new LiteralText("Tắt AFK");
+    private static final Text AFK_TITLE = new LiteralText("");
+    private static final Text ENABLED = new LiteralText("AFK network-only mode enabled.");
+    private static final Text DISABLED = new LiteralText("AFK network-only mode disabled.");
+    private static final EmptyAfkScreen EMPTY_SCREEN = new EmptyAfkScreen();
 
     private static final int AFK_FRAMERATE_LIMIT = 1;
+    private static final int AFK_VIEW_DISTANCE = 2;
+    private static final int AFK_SIMULATION_DISTANCE = 2;
 
     private static boolean afkEnabled;
     private static int savedFramerateLimit = 60;
     private static Screen previousScreen;
+    private static SavedOptions savedOptions;
 
     @Override
     public void onInitializeClient() {
@@ -34,40 +40,31 @@ public final class AfkClientMod implements ClientModInitializer {
                 .executes(context -> toggleWithFeedback(context.getSource().getClient(), context.getSource()))
                 .then(ClientCommandManager.literal("on").executes(context -> {
                     enableAfk(context.getSource().getClient());
-                    context.getSource().sendFeedback(new LiteralText("AFK Helper enabled. FPS capped to 1 and rendering minimized."));
+                    context.getSource().sendFeedback(ENABLED);
                     return 1;
                 }))
                 .then(ClientCommandManager.literal("off").executes(context -> {
                     disableAfk(context.getSource().getClient());
-                    context.getSource().sendFeedback(new LiteralText("AFK Helper disabled. Settings restored."));
+                    context.getSource().sendFeedback(DISABLED);
                     return 1;
                 }))
                 .then(ClientCommandManager.literal("toggle").executes(context ->
                     toggleWithFeedback(context.getSource().getClient(), context.getSource())
                 ))
         );
-
-        ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (afkEnabled) {
-                keepAfkOptimizationsApplied(client);
-                keepAfkScreenOpen(client);
-            }
-        });
-
-        AFKHelper.LOGGER.info("AFK Helper client power saver loaded. Use /afk on, /afk off, or /afk toggle.");
     }
 
     public static boolean isAfkEnabled() {
         return afkEnabled;
     }
 
-    private static int toggleWithFeedback(MinecraftClient client, net.fabricmc.fabric.api.client.command.v1.FabricClientCommandSource source) {
+    private static int toggleWithFeedback(MinecraftClient client, FabricClientCommandSource source) {
         if (afkEnabled) {
             disableAfk(client);
-            source.sendFeedback(new LiteralText("AFK Helper disabled. Settings restored."));
+            source.sendFeedback(DISABLED);
         } else {
             enableAfk(client);
-            source.sendFeedback(new LiteralText("AFK Helper enabled. FPS capped to 1 and rendering minimized."));
+            source.sendFeedback(ENABLED);
         }
         return 1;
     }
@@ -79,15 +76,17 @@ public final class AfkClientMod implements ClientModInitializer {
 
         afkEnabled = true;
         previousScreen = client.currentScreen;
+        savedOptions = new SavedOptions(client.options);
 
         if (client.getWindow() != null) {
             savedFramerateLimit = client.getWindow().getFramerateLimit();
+            client.getWindow().setFramerateLimit(AFK_FRAMERATE_LIMIT);
         }
 
-        client.execute(() -> {
-            keepAfkOptimizationsApplied(client);
-            keepAfkScreenOpen(client);
-        });
+        applyNetworkOnlyOptions(client);
+        client.getSoundManager().stopAll();
+        client.setScreen(EMPTY_SCREEN);
+        client.worldRenderer.scheduleTerrainUpdate();
     }
 
     public static void disableAfk(MinecraftClient client) {
@@ -100,47 +99,68 @@ public final class AfkClientMod implements ClientModInitializer {
         if (client.getWindow() != null) {
             client.getWindow().setFramerateLimit(savedFramerateLimit);
         }
+        if (savedOptions != null) {
+            savedOptions.restore(client.options);
+            savedOptions = null;
+        }
 
-        Screen screenToRestore = previousScreen;
+        Screen screenToRestore = previousScreen == EMPTY_SCREEN ? null : previousScreen;
         previousScreen = null;
-        client.execute(() -> client.setScreen(screenToRestore));
+        client.setScreen(screenToRestore);
+        client.worldRenderer.scheduleTerrainUpdate();
     }
 
-    private static void keepAfkOptimizationsApplied(MinecraftClient client) {
-        if (client != null && client.getWindow() != null
-            && client.getWindow().getFramerateLimit() != AFK_FRAMERATE_LIMIT) {
-            client.getWindow().setFramerateLimit(AFK_FRAMERATE_LIMIT);
+    private static void applyNetworkOnlyOptions(MinecraftClient client) {
+        GameOptions options = client.options;
+        options.maxFps = AFK_FRAMERATE_LIMIT;
+        options.viewDistance = AFK_VIEW_DISTANCE;
+        options.simulationDistance = AFK_SIMULATION_DISTANCE;
+        options.entityDistanceScaling = 0.5F;
+        options.cloudRenderMode = CloudRenderMode.OFF;
+        options.graphicsMode = GraphicsMode.FAST;
+        options.chunkBuilderMode = ChunkBuilderMode.NONE;
+        options.particles = ParticlesMode.MINIMAL;
+        options.mipmapLevels = 0;
+        options.biomeBlendRadius = 0;
+        options.entityShadows = false;
+        options.showSubtitles = false;
+        options.hudHidden = true;
+        options.debugEnabled = false;
+        options.debugProfilerEnabled = false;
+        options.debugTpsEnabled = false;
+        options.bobView = false;
+        options.heldItemTooltips = false;
+        options.fovEffectScale = 0.0F;
+        options.distortionEffectScale = 0.0F;
+        for (SoundCategory category : SoundCategory.values()) {
+            options.setSoundVolume(category, 0.0F);
+            client.getSoundManager().updateSoundVolume(category, 0.0F);
+        }
+        if (client.world != null) {
+            client.world.setSimulationDistance(AFK_SIMULATION_DISTANCE);
         }
     }
 
-    private static void keepAfkScreenOpen(MinecraftClient client) {
-        if (client != null && !(client.currentScreen instanceof AfkScreen)) {
-            client.setScreen(new AfkScreen());
-        }
-    }
-
-    private static final class AfkScreen extends Screen {
-        private AfkScreen() {
+    private static final class EmptyAfkScreen extends Screen {
+        private EmptyAfkScreen() {
             super(AFK_TITLE);
         }
 
         @Override
         protected void init() {
             clearChildren();
-            addDrawableChild(new ButtonWidget(
-                this.width / 2 - 100,
-                this.height / 2 - 10,
-                200,
-                20,
-                DISABLE_AFK,
-                button -> disableAfk(MinecraftClient.getInstance())
-            ));
         }
 
         @Override
         public void render(MatrixStack matrices, int mouseX, int mouseY, float delta) {
-            renderBackground(matrices);
-            super.render(matrices, mouseX, mouseY, delta);
+        }
+
+        @Override
+        public void tick() {
+        }
+
+        @Override
+        public void renderBackground(MatrixStack matrices) {
         }
 
         @Override
@@ -149,13 +169,90 @@ public final class AfkClientMod implements ClientModInitializer {
         }
 
         @Override
-        public void renderBackground(MatrixStack matrices) {
-            fill(matrices, 0, 0, this.width, this.height, 0xFF000000);
-        }
-
-        @Override
         public boolean shouldCloseOnEsc() {
             return false;
+        }
+    }
+
+    private static final class SavedOptions {
+        private final int maxFps;
+        private final int viewDistance;
+        private final int simulationDistance;
+        private final float entityDistanceScaling;
+        private final CloudRenderMode cloudRenderMode;
+        private final GraphicsMode graphicsMode;
+        private final ChunkBuilderMode chunkBuilderMode;
+        private final ParticlesMode particles;
+        private final int mipmapLevels;
+        private final int biomeBlendRadius;
+        private final boolean entityShadows;
+        private final boolean showSubtitles;
+        private final boolean hudHidden;
+        private final boolean debugEnabled;
+        private final boolean debugProfilerEnabled;
+        private final boolean debugTpsEnabled;
+        private final boolean bobView;
+        private final boolean heldItemTooltips;
+        private final float fovEffectScale;
+        private final float distortionEffectScale;
+        private final float[] soundVolumes = new float[SoundCategory.values().length];
+
+        private SavedOptions(GameOptions options) {
+            maxFps = options.maxFps;
+            viewDistance = options.viewDistance;
+            simulationDistance = options.simulationDistance;
+            entityDistanceScaling = options.entityDistanceScaling;
+            cloudRenderMode = options.cloudRenderMode;
+            graphicsMode = options.graphicsMode;
+            chunkBuilderMode = options.chunkBuilderMode;
+            particles = options.particles;
+            mipmapLevels = options.mipmapLevels;
+            biomeBlendRadius = options.biomeBlendRadius;
+            entityShadows = options.entityShadows;
+            showSubtitles = options.showSubtitles;
+            hudHidden = options.hudHidden;
+            debugEnabled = options.debugEnabled;
+            debugProfilerEnabled = options.debugProfilerEnabled;
+            debugTpsEnabled = options.debugTpsEnabled;
+            bobView = options.bobView;
+            heldItemTooltips = options.heldItemTooltips;
+            fovEffectScale = options.fovEffectScale;
+            distortionEffectScale = options.distortionEffectScale;
+            SoundCategory[] categories = SoundCategory.values();
+            for (int i = 0; i < categories.length; i++) {
+                soundVolumes[i] = options.getSoundVolume(categories[i]);
+            }
+        }
+
+        private void restore(GameOptions options) {
+            options.maxFps = maxFps;
+            options.viewDistance = viewDistance;
+            options.simulationDistance = simulationDistance;
+            options.entityDistanceScaling = entityDistanceScaling;
+            options.cloudRenderMode = cloudRenderMode;
+            options.graphicsMode = graphicsMode;
+            options.chunkBuilderMode = chunkBuilderMode;
+            options.particles = particles;
+            options.mipmapLevels = mipLevels();
+            options.biomeBlendRadius = biomeBlendRadius;
+            options.entityShadows = entityShadows;
+            options.showSubtitles = showSubtitles;
+            options.hudHidden = hudHidden;
+            options.debugEnabled = debugEnabled;
+            options.debugProfilerEnabled = debugProfilerEnabled;
+            options.debugTpsEnabled = debugTpsEnabled;
+            options.bobView = bobView;
+            options.heldItemTooltips = heldItemTooltips;
+            options.fovEffectScale = fovEffectScale;
+            options.distortionEffectScale = distortionEffectScale;
+            SoundCategory[] categories = SoundCategory.values();
+            for (int i = 0; i < categories.length; i++) {
+                options.setSoundVolume(categories[i], soundVolumes[i]);
+            }
+        }
+
+        private int mipLevels() {
+            return mipmapLevels;
         }
     }
 }
