@@ -19,9 +19,7 @@ import net.minecraft.text.Text;
  */
 public final class AfkClientMod implements ClientModInitializer {
     private static final Text AFK_TITLE = new LiteralText("AFK Helper");
-    private static final Text AFK_BODY = new LiteralText("AFK power saver is enabled");
-    private static final Text AFK_HINT = new LiteralText("World rendering is paused locally; network/server connection stays active.");
-    private static final Text RETURN_TO_GAME = new LiteralText("Return to game");
+    private static final Text DISABLE_AFK = new LiteralText("Tắt AFK");
 
     private static final int AFK_FRAMERATE_LIMIT = 1;
 
@@ -52,6 +50,7 @@ public final class AfkClientMod implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (afkEnabled) {
                 keepAfkOptimizationsApplied(client);
+                keepAfkScreenOpen(client);
             }
         });
 
@@ -87,7 +86,7 @@ public final class AfkClientMod implements ClientModInitializer {
 
         client.execute(() -> {
             keepAfkOptimizationsApplied(client);
-            client.setScreen(new AfkScreen());
+            keepAfkScreenOpen(client);
         });
     }
 
@@ -114,6 +113,12 @@ public final class AfkClientMod implements ClientModInitializer {
         }
     }
 
+    private static void keepAfkScreenOpen(MinecraftClient client) {
+        if (client != null && !(client.currentScreen instanceof AfkScreen)) {
+            client.setScreen(new AfkScreen());
+        }
+    }
+
     private static final class AfkScreen extends Screen {
         private AfkScreen() {
             super(AFK_TITLE);
@@ -124,19 +129,17 @@ public final class AfkClientMod implements ClientModInitializer {
             clearChildren();
             addDrawableChild(new ButtonWidget(
                 this.width / 2 - 100,
-                this.height / 2 + 28,
+                this.height / 2 - 10,
                 200,
                 20,
-                RETURN_TO_GAME,
+                DISABLE_AFK,
                 button -> disableAfk(MinecraftClient.getInstance())
             ));
         }
 
         @Override
         public void render(MatrixStack matrices, int mouseX, int mouseY, float delta) {
-            fill(matrices, 0, 0, this.width, this.height, 0xFF000000);
-            drawCenteredTextWithShadow(matrices, this.textRenderer, AFK_BODY.asOrderedText(), this.width / 2, this.height / 2 - 18, 0x55FF55);
-            drawCenteredTextWithShadow(matrices, this.textRenderer, AFK_HINT.asOrderedText(), this.width / 2, this.height / 2 - 4, 0xAAAAAA);
+            renderBackground(matrices);
             super.render(matrices, mouseX, mouseY, delta);
         }
 
@@ -146,12 +149,13 @@ public final class AfkClientMod implements ClientModInitializer {
         }
 
         @Override
-        public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-            if (keyCode == 256) {
-                return true;
-            }
+        public void renderBackground(MatrixStack matrices) {
+            fill(matrices, 0, 0, this.width, this.height, 0xFF000000);
+        }
 
-            return super.keyPressed(keyCode, scanCode, modifiers);
+        @Override
+        public boolean shouldCloseOnEsc() {
+            return false;
         }
     }
 }
