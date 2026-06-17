@@ -3,20 +3,20 @@
 	"id": "afkhelper",
 	"version": "${version}",
 	"name": "AFKHelper",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "Client-side AFK power saver that keeps multiplayer sessions connected while minimizing local Minecraft rendering and FPS usage.",
 	"authors": [
-		"Me!"
+		"AFKHelper contributors"
 	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
+	"contact": {},
 	"license": "CC0-1.0",
 	"icon": "assets/afkhelper/icon.png",
-	"environment": "*",
+	"environment": "client",
 	"entrypoints": {
 		"main": [
 			"com.afk.AFKHelper"
+		],
+		"client": [
+			"com.afk.AfkClientMod"
 		]
 	},
 	"mixins": [
