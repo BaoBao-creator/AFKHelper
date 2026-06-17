@@ -2,7 +2,6 @@ package com.afk;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v1.ClientCommandManager;
-import net.fabricmc.fabric.api.client.command.v1.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
@@ -32,7 +31,7 @@ public final class AfkClientMod implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
-        ClientCommandRegistrationCallback.EVENT.register((dispatcher, registryAccess) -> dispatcher.register(
+        ClientCommandManager.DISPATCHER.register(
             ClientCommandManager.literal("afk")
                 .executes(context -> toggleWithFeedback(context.getSource().getClient(), context.getSource()))
                 .then(ClientCommandManager.literal("on").executes(context -> {
@@ -48,7 +47,7 @@ public final class AfkClientMod implements ClientModInitializer {
                 .then(ClientCommandManager.literal("toggle").executes(context ->
                     toggleWithFeedback(context.getSource().getClient(), context.getSource())
                 ))
-        ));
+        );
 
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             if (afkEnabled) {
@@ -136,8 +135,8 @@ public final class AfkClientMod implements ClientModInitializer {
         @Override
         public void render(MatrixStack matrices, int mouseX, int mouseY, float delta) {
             fill(matrices, 0, 0, this.width, this.height, 0xFF000000);
-            drawCenteredTextWithShadow(matrices, this.textRenderer, AFK_BODY, this.width / 2, this.height / 2 - 18, 0x55FF55);
-            drawCenteredTextWithShadow(matrices, this.textRenderer, AFK_HINT, this.width / 2, this.height / 2 - 4, 0xAAAAAA);
+            drawCenteredTextWithShadow(matrices, this.textRenderer, AFK_BODY.asOrderedText(), this.width / 2, this.height / 2 - 18, 0x55FF55);
+            drawCenteredTextWithShadow(matrices, this.textRenderer, AFK_HINT.asOrderedText(), this.width / 2, this.height / 2 - 4, 0xAAAAAA);
             super.render(matrices, mouseX, mouseY, delta);
         }
 
@@ -147,8 +146,12 @@ public final class AfkClientMod implements ClientModInitializer {
         }
 
         @Override
-        public boolean shouldCloseOnEsc() {
-            return false;
+        public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+            if (keyCode == 256) {
+                return true;
+            }
+
+            return super.keyPressed(keyCode, scanCode, modifiers);
         }
     }
 }
