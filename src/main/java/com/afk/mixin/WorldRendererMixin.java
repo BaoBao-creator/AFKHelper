@@ -1,6 +1,7 @@
 package com.afk.mixin;
 
 import com.afk.AfkClientMod;
+import net.minecraft.client.render.BufferBuilder;
 import net.minecraft.client.render.Camera;
 import net.minecraft.client.render.GameRenderer;
 import net.minecraft.client.render.LightmapTextureManager;
@@ -19,8 +20,13 @@ public class WorldRendererMixin {
         if (AfkClientMod.isAfkEnabled()) ci.cancel();
     }
 
-    @Inject(method = {"tick", "reload", "scheduleTerrainUpdate", "drawEntityOutlinesFramebuffer", "tickRainSplashing", "renderSky", "renderClouds", "addParticle", "processGlobalEvent", "processWorldEvent", "setBlockBreakingInfo", "updateNoCullingBlockEntities", "scheduleBlockRenders", "scheduleBlockRender", "scheduleBlockRerenderIfNeeded", "updateBlock", "playSong"}, at = @At("HEAD"), cancellable = true)
+    @Inject(method = {"tick", "reload", "scheduleTerrainUpdate", "drawEntityOutlinesFramebuffer", "tickRainSplashing", "renderClouds", "addParticle", "processGlobalEvent", "processWorldEvent", "setBlockBreakingInfo", "updateNoCullingBlockEntities", "scheduleBlockRenders", "scheduleBlockRender", "scheduleBlockRerenderIfNeeded", "updateBlock", "playSong"}, at = @At("HEAD"), cancellable = true)
     private void afkhelper$skipRendererWork(CallbackInfo ci) {
+        if (AfkClientMod.isAfkEnabled()) ci.cancel();
+    }
+
+    @Inject(method = "renderSky(Lnet/minecraft/client/render/BufferBuilder;F)V", at = @At("HEAD"), cancellable = true)
+    private static void afkhelper$skipStaticSkyRender(BufferBuilder builder, float red, CallbackInfo ci) {
         if (AfkClientMod.isAfkEnabled()) ci.cancel();
     }
 }
