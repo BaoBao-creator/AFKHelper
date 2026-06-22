@@ -1,5 +1,6 @@
 package com.afk.bot;
 
+import com.afk.mixin.MinecraftClientSessionAccessor;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
@@ -51,13 +52,15 @@ public final class SessionTransitionManager {
             throw new IllegalStateException("The active server connection is not open.");
         }
 
-        SessionIdentity identity = setNextOfflineIdentity(username);
+        SessionIdentity currentIdentity = SessionIdentity.from(client.getSession());
+        SessionIdentity nextOfflineIdentity = setNextOfflineIdentity(username);
         ServerEndpoint endpoint = resolveServerEndpoint(client, connection);
-        BotConnection bot = new BotConnection(identity, endpoint.host(), endpoint.port(), connection, handler);
+        BotConnection bot = new BotConnection(currentIdentity, endpoint.host(), endpoint.port(), connection, handler);
         if (!store.put(bot)) {
-            throw new IllegalStateException(identity.username() + " is already tracked.");
+            throw new IllegalStateException(currentIdentity.username() + " is already tracked.");
         }
 
+        overrideClientSession(client, nextOfflineIdentity);
         detachClientToTitleScreen(client);
         bot.startBackgroundTicking();
         return bot;
@@ -75,6 +78,10 @@ public final class SessionTransitionManager {
             return new ServerEndpoint(inetSocketAddress.getHostString(), inetSocketAddress.getPort());
         }
         return new ServerEndpoint(String.valueOf(remote), -1);
+    }
+
+    private static void overrideClientSession(MinecraftClient client, SessionIdentity identity) {
+        ((MinecraftClientSessionAccessor) client).afkhelper$setSession(identity.session());
     }
 
     private static void detachClientToTitleScreen(MinecraftClient client) {
