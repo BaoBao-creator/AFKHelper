@@ -31,7 +31,7 @@ public final class ProxyProvider {
     private static final Logger LOGGER = LogManager.getLogger("AFKHelper/ProxyProvider");
     private static final ProxyProvider INSTANCE = new ProxyProvider();
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(3);
-    private static final int VERIFY_TIMEOUT_MS = 2_500;
+    private static final int VERIFY_TIMEOUT_MS = 500;
     private static final Pattern HOST_PORT = Pattern.compile("(?m)([A-Za-z0-9.-]+):(\\d{2,5})");
 
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build();
@@ -53,7 +53,7 @@ public final class ProxyProvider {
                 }
             }
         }
-        LOGGER.error("No public proxy could tunnel to {}:{}; refusing AFK bot join instead of reusing the normal IP.", targetServer.getHostString(), targetServer.getPort());
+        LOGGER.error("No public proxy passed the fast pre-check or could tunnel to {}:{}; refusing AFK bot join instead of reusing the normal IP.", targetServer.getHostString(), targetServer.getPort());
         return Optional.empty();
     }
 
