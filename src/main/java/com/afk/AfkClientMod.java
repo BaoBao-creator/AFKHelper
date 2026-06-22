@@ -1,5 +1,7 @@
 package com.afk;
 
+import com.afk.mixin.MinecraftClientSessionAccessor;
+import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v1.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v1.FabricClientCommandSource;
@@ -10,10 +12,16 @@ import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.GraphicsMode;
 import net.minecraft.client.option.ParticlesMode;
 import net.minecraft.client.render.ChunkBuilderMode;
+import net.minecraft.client.util.Session;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.text.LiteralText;
 import net.minecraft.text.Text;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Turns the client into a minimal network keeper while AFK is enabled.
@@ -22,6 +30,7 @@ public final class AfkClientMod implements ClientModInitializer {
     private static final Text AFK_TITLE = new LiteralText("");
     private static final Text ENABLED = new LiteralText("AFK network-only mode enabled.");
     private static final Text DISABLED = new LiteralText("AFK network-only mode disabled.");
+    private static final Pattern OFFLINE_USERNAME_PATTERN = Pattern.compile("[A-Za-z0-9_]{3,16}");
     private static final EmptyAfkScreen EMPTY_SCREEN = new EmptyAfkScreen();
 
     private static final int AFK_FRAMERATE_LIMIT = 1;
@@ -52,10 +61,41 @@ public final class AfkClientMod implements ClientModInitializer {
                     toggleWithFeedback(context.getSource().getClient(), context.getSource())
                 ))
         );
+
+        ClientCommandManager.DISPATCHER.register(
+            ClientCommandManager.literal("switch")
+                .then(ClientCommandManager.argument("name", StringArgumentType.word())
+                    .executes(context -> switchOfflineAccount(
+                        context.getSource().getClient(),
+                        context.getSource(),
+                        StringArgumentType.getString(context, "name")
+                    ))
+                )
+        );
     }
 
     public static boolean isAfkEnabled() {
         return afkEnabled;
+    }
+
+    private static int switchOfflineAccount(MinecraftClient client, FabricClientCommandSource source, String username) {
+        if (!OFFLINE_USERNAME_PATTERN.matcher(username).matches()) {
+            source.sendError(new LiteralText("Invalid cracked account name. Use 3-16 letters, numbers, or underscores."));
+            return 0;
+        }
+
+        UUID offlineUuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + username).getBytes(StandardCharsets.UTF_8));
+        Session offlineSession = new Session(
+            username,
+            offlineUuid.toString(),
+            "",
+            Optional.empty(),
+            Optional.empty(),
+            Session.AccountType.LEGACY
+        );
+        ((MinecraftClientSessionAccessor) client).afkhelper$setSession(offlineSession);
+        source.sendFeedback(new LiteralText("Next server join will use cracked account: " + username));
+        return 1;
     }
 
     private static int toggleWithFeedback(MinecraftClient client, FabricClientCommandSource source) {
