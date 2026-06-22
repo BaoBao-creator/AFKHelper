@@ -1,6 +1,7 @@
 package com.afk.bot;
 
 import com.afk.mixin.MinecraftClientSessionAccessor;
+import com.afk.proxy.BotProxyContext;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
@@ -34,6 +35,7 @@ public final class SessionTransitionManager {
     public SessionIdentity setNextOfflineIdentity(String username) {
         SessionIdentity identity = SessionIdentity.offline(username);
         nextIdentity.set(identity);
+        BotProxyContext.markNextJoinAsBot();
         return identity;
     }
 
