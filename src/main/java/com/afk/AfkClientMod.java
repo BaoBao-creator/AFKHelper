@@ -102,8 +102,8 @@ public final class AfkClientMod implements ClientModInitializer {
             return 0;
         }
 
-        SessionIdentity identity = BotManager.getInstance().setNextOfflineIdentity(username);
-        source.sendFeedback(new LiteralText("Stored offline profile internally: " + identity.username() + ". MinecraftClient.session was not changed; reconnect with vanilla UI to keep the real client stable."));
+        SessionIdentity identity = BotManager.getInstance().switchVisibleClientToOffline(client, username);
+        source.sendFeedback(new LiteralText("Switched to cracked account " + identity.username() + ". Disconnected to the main menu; the next server join will use this name."));
         return 1;
     }
 

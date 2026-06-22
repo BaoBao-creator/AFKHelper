@@ -12,6 +12,7 @@ public final class BotManager {
     public static BotManager getInstance() { return INSTANCE; }
     public BotConnection join(MinecraftClient client, String username) { return transitionManager.preserveActiveAndPrepare(client, username); }
     public SessionIdentity setNextOfflineIdentity(String username) { return transitionManager.setNextOfflineIdentity(username); }
+    public SessionIdentity switchVisibleClientToOffline(MinecraftClient client, String username) { return transitionManager.switchVisibleClientToOffline(client, username); }
     public Collection<BotConnection> list() { return store.all(); }
     public java.util.Optional<BotConnection> findByHandler(net.minecraft.client.network.ClientPlayNetworkHandler handler) { return store.all().stream().filter(c -> c.getHandler() == handler).findFirst(); }
     public java.util.Optional<BotConnection> findByConnection(net.minecraft.network.ClientConnection connection) { return store.all().stream().filter(c -> c.getConnection() == connection).findFirst(); }

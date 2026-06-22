@@ -1,6 +1,6 @@
 # AFKHelper account/session architecture
 
-AFKHelper targets Minecraft/Fabric 1.18 and Java 17. Minecraft 1.18 does not expose a supported runtime account switch API, and `MinecraftClient.session` is private/final state owned by vanilla startup/login code. AFKHelper therefore keeps offline/cracked profiles as internal metadata instead of assigning them to the running `MinecraftClient`.
+AFKHelper targets Minecraft/Fabric 1.18 and Java 17. Minecraft 1.18 does not expose a supported in-place account switch API for an active play connection. AFKHelper therefore only swaps the visible client identity at a vanilla disconnect boundary, then sends the player back to the title screen before the next server join.
 
 ## Crash cause fixed by this design
 
@@ -13,11 +13,11 @@ That left the client with partially replaced identity state and partially torn-d
 
 ## Current safe model
 
-`SessionTransitionManager` now only validates and stores a `SessionIdentity` created with the vanilla offline UUID algorithm (`OfflinePlayer:<name>`) and `LEGACY` account type. The active `MinecraftClient.session` is never modified.
+`SessionTransitionManager` validates and stores a `SessionIdentity` created with the vanilla offline UUID algorithm (`OfflinePlayer:<name>`) and `LEGACY` account type. For `/switch`, it applies that identity to `MinecraftClient.session` and immediately runs the vanilla disconnect flow to return to the title screen, so the next server join uses the selected offline/cracked name without mutating an active play connection in-place.
 
 `/bot join <username>` creates an internal AFKHelper bot profile record. It does not steal the active `ClientConnection`, does not tick vanilla networking from another thread, and does not clear the visible client's world/player references. This preserves stability on Minecraft 1.18. The record is useful for command/UI bookkeeping and for future safe bot implementations that create their own connection stack instead of reusing the active client's stack.
 
-`/switch <username>` stores the same kind of internal offline profile. Because Minecraft 1.18 cannot safely swap the current client session in-place, the command reports that the vanilla client session was not changed. To actually use another account for the visible client, reconnect using a supported launcher/account flow or a future implementation that creates a separate login connection without mutating `MinecraftClient.session`.
+`/switch <username>` stores the same kind of offline profile, assigns it to the visible client's session, and disconnects to the main menu. The current server connection is not kept alive; the selected offline/cracked name is used when the player joins a server again.
 
 ## AFK/network-only mode
 
@@ -32,4 +32,4 @@ Render/audio mixins are intentionally limited to optional visual/audio work whil
 * `/bot list` reports the active visible client, tracked internal profiles, and the currently stored offline profile.
 * `/bot leave <username>` removes a tracked internal profile.
 * `/bot leave all` removes all tracked internal profiles.
-* `/switch <username>` stores an internal offline profile only; it does not mutate `MinecraftClient.session`.
+* `/switch <username>` switches the visible client to an offline/cracked profile, disconnects to the main menu, and uses that name for the next server join.
