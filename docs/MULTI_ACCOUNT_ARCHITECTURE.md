@@ -1,53 +1,35 @@
-# AFKHelper multi-account background sessions
+# AFKHelper account/session architecture
 
-AFKHelper targets Minecraft/Fabric 1.18 and Java 17. The multi-account path is intentionally limited to offline-mode/cracked servers: it creates `Session` instances with the vanilla `OfflinePlayer:<name>` UUID algorithm and `LEGACY` account type. It does not use `FakePlayerEntity`, local entity simulation, or a client restart.
+AFKHelper targets Minecraft/Fabric 1.18 and Java 17. Minecraft 1.18 does not expose a supported runtime account switch API, and `MinecraftClient.session` is private/final state owned by vanilla startup/login code. AFKHelper therefore keeps offline/cracked profiles as internal metadata instead of assigning them to the running `MinecraftClient`.
 
-## Minecraft client internals that must be intercepted
+## Crash cause fixed by this design
 
-A normal `MinecraftClient.disconnect(Screen)` tears down the active `ClientWorld`, `ClientPlayerEntity`, `ClientPlayerInteractionManager`, screen state, and ultimately closes the `ClientConnection` held by `ClientPlayNetworkHandler`. For `/bot join <username>`, that teardown cannot be used because it would destroy the old account's server-visible socket.
+The old implementation tried to make `/switch` and `/bot join` work by:
 
-The implementation therefore preserves these references before the UI transition:
+* writing directly to `MinecraftClient.session` through `MinecraftClientSessionAccessor`; and
+* clearing core client fields such as `player`, `interactionManager`, `cameraEntity`, `targetedEntity`, `crosshairTarget`, and `world` without a vanilla disconnect/reconnect lifecycle.
 
-* `ClientPlayNetworkHandler` and its `ClientConnection` are moved into `BotConnection`.
-* The current `Session` is copied into `SessionIdentity` for the background record.
-* The current `ServerInfo`/socket address is copied for diagnostics and future switch logic.
-* The visible client's `player`, `interactionManager`, `cameraEntity`, `targetedEntity`, `crosshairTarget`, and `world` references are cleared without calling vanilla disconnect.
-* `MinecraftClient.session` is changed through `MinecraftClientSessionAccessor`, because the field is private/final in normal client code paths.
-* `ClientPlayNetworkHandlerMixin` observes play packets on preserved handlers so the background model sees keepalives, disconnects, join, position, chat, spawn, player-list, and respawn events.
+That left the client with partially replaced identity state and partially torn-down world/network/render state. Later vanilla ticks and renders still expect those fields to be consistent, so the client can crash after the command or on the next transition.
 
-## Session transition
+## Current safe model
 
-`/bot join Steve` is handled by `BotCommands`, then `BotManager`, then `SessionTransitionManager`:
+`SessionTransitionManager` now only validates and stores a `SessionIdentity` created with the vanilla offline UUID algorithm (`OfflinePlayer:<name>`) and `LEGACY` account type. The active `MinecraftClient.session` is never modified.
 
-1. Validate `Steve` as an offline-mode username.
-2. Capture the active handler/connection for Alex.
-3. Store Alex as a `BotConnection` in `BackgroundConnectionStore`.
-4. Start a dedicated background ticker for Alex's connection.
-5. Clear active render/control/world references from `MinecraftClient`.
-6. Replace the next active `Session` with Steve's offline-mode profile.
-7. Return the visible UI to `TitleScreen`.
+`/bot join <username>` creates an internal AFKHelper bot profile record. It does not steal the active `ClientConnection`, does not tick vanilla networking from another thread, and does not clear the visible client's world/player references. This preserves stability on Minecraft 1.18. The record is useful for command/UI bookkeeping and for future safe bot implementations that create their own connection stack instead of reusing the active client's stack.
 
-The result is an explicit model with an active client slot, background connection store, menu state, transition state, and preserved network state.
+`/switch <username>` stores the same kind of internal offline profile. Because Minecraft 1.18 cannot safely swap the current client session in-place, the command reports that the vanilla client session was not changed. To actually use another account for the visible client, reconnect using a supported launcher/account flow or a future implementation that creates a separate login connection without mutating `MinecraftClient.session`.
 
-## Packet flow
+## AFK/network-only mode
 
-The background connection keeps using the original Netty `ClientConnection`. Its scheduled task calls `ClientConnection.tick()` every 50 ms and checks `handleDisconnection()` when the socket closes. Vanilla's packet listener remains installed, while `ClientPlayNetworkHandlerMixin` mirrors important packets into `PacketHandler` for background bookkeeping.
+The `/afk` command remains the supported low-resource mode for the active client. It reduces FPS, view/simulation distance, particles, graphics options, sound volume, HUD visibility, and displays an empty non-pausing screen. This happens at the UI/options/render level rather than by corrupting core client state.
 
-`PacketHandler` handles:
-
-* `KeepAliveS2CPacket` by immediately sending `KeepAliveC2SPacket`.
-* `DisconnectS2CPacket` by closing only that background connection.
-* `GameJoinS2CPacket`, `PlayerPositionLookS2CPacket`, `GameMessageS2CPacket`, `EntitySpawnS2CPacket`, `PlayerListS2CPacket`, and `PlayerRespawnS2CPacket` by refreshing liveness metadata.
-
-## Thread safety and error handling
-
-`BackgroundConnectionStore` uses a `ConcurrentHashMap`. `BotConnection` uses atomics for state, close coordination, background/active flags, and keepalive timestamps. Each background session has a single daemon scheduler so network ticks are serialized per connection and never block the main render thread. Join/leave operations remove sessions before closing them, which avoids double-close races.
-
-If capture fails, `/bot join` reports the reason to chat and does not mutate session state. If a background tick throws or the socket closes, the connection moves to `ERROR`/`DISCONNECTED` and shuts its scheduler down.
+Render/audio mixins are intentionally limited to optional visual/audio work while AFK is enabled. They do not cancel broad client lifecycle methods such as screen ticking, game renderer ticking, world entity ticking, resource reloads, or terrain update scheduling.
 
 ## Commands
 
-* `/bot join <username>` preserves the current connection in the background, returns to the menu, and stores `<username>` as the next active offline profile.
-* `/bot list` reports active/background sessions, connection status, ping, uptime, and next active profile.
-* `/bot leave <username>` closes only the named background session.
-* `/bot leave all` closes all background sessions.
+* `/afk`, `/afk on`, `/afk off`, `/afk toggle` toggle low-resource AFK mode for the active client.
+* `/bot join <username>` stores an internal offline bot profile without changing the running client session.
+* `/bot list` reports the active visible client, tracked internal profiles, and the currently stored offline profile.
+* `/bot leave <username>` removes a tracked internal profile.
+* `/bot leave all` removes all tracked internal profiles.
+* `/switch <username>` stores an internal offline profile only; it does not mutate `MinecraftClient.session`.

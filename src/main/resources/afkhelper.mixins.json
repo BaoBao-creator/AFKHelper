@@ -16,9 +16,6 @@
 		"ParticleManagerMixin",
 		"SoundManagerMixin",
 		"ChunkBuilderMixin",
-		"ClientWorldMixin",
-		"ScreenMixin",
-		"MinecraftClientSessionAccessor",
-		"ClientPlayNetworkHandlerMixin"
+		"ClientWorldMixin"
 	]
 }

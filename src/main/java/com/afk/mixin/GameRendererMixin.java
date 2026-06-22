@@ -10,8 +10,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(GameRenderer.class)
 public class GameRendererMixin {
-    @Inject(method = {"render", "tick", "updateTargetedEntity", "renderWithZoom", "reset", "showFloatingItem"}, at = @At("HEAD"), cancellable = true)
-    private void afkhelper$skipVisualFrameWork(CallbackInfo info) {
+    @Inject(method = {"renderWithZoom", "showFloatingItem"}, at = @At("HEAD"), cancellable = true)
+    private void afkhelper$skipOptionalVisualEffects(CallbackInfo info) {
         if (AfkClientMod.isAfkEnabled()) {
             info.cancel();
         }

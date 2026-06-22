@@ -11,6 +11,7 @@ public final class BotManager {
     private final SessionTransitionManager transitionManager = new SessionTransitionManager(store);
     public static BotManager getInstance() { return INSTANCE; }
     public BotConnection join(MinecraftClient client, String username) { return transitionManager.preserveActiveAndPrepare(client, username); }
+    public SessionIdentity setNextOfflineIdentity(String username) { return transitionManager.setNextOfflineIdentity(username); }
     public Collection<BotConnection> list() { return store.all(); }
     public java.util.Optional<BotConnection> findByHandler(net.minecraft.client.network.ClientPlayNetworkHandler handler) { return store.all().stream().filter(c -> c.getHandler() == handler).findFirst(); }
     public boolean leave(String username) { return store.remove(username).map(c -> { c.close(); return true; }).orElse(false); }
