@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 import java.net.InetSocketAddress;
 
 public final class ProxyInjectingChannelInitializer extends ChannelInitializer<Channel> {
-    public static final int PROXY_CONNECT_TIMEOUT_MS = 1_500;
+    public static final int PROXY_CONNECT_TIMEOUT_MS = 5_000;
     private static final int PROXY_READ_TIMEOUT_SECONDS = 5;
     private final ChannelHandler vanillaInitializer;
     private final ProxyEndpoint proxyEndpoint;

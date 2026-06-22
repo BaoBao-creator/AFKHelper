@@ -1,9 +1,5 @@
 package com.afk.proxy;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -20,7 +16,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.LinkedHashSet;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
@@ -33,6 +28,13 @@ public final class ProxyProvider {
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(3);
     private static final int VERIFY_TIMEOUT_MS = 500;
     private static final Pattern HOST_PORT = Pattern.compile("(?m)([A-Za-z0-9.-]+):(\\d{2,5})");
+    private static final String PROXYSCRAPE_HTTP = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=getproxies&protocol=http&timeout=5000&country=all&ssl=all&anonymity=all";
+    private static final String PROXYSCRAPE_SOCKS5 = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=getproxies&protocol=socks5&timeout=5000&country=all&ssl=all&anonymity=all";
+    private static final String PROXIFLY_HTTP = "https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/http/data.txt";
+    private static final String PROXIFLY_SOCKS5 = "https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/socks5/data.txt";
+    private static final String MONOSANS_HTTP = "https://cdn.jsdelivr.net/gh/monosans/proxy-list@main/proxies/http.txt";
+    private static final String MONOSANS_SOCKS5 = "https://cdn.jsdelivr.net/gh/monosans/proxy-list@main/proxies/socks5.txt";
+    private static final String SPYS_ME = "https://spys.me/proxy.txt";
 
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build();
     private final Queue<ProxyEndpoint> candidates = new ArrayDeque<>();
@@ -59,9 +61,13 @@ public final class ProxyProvider {
 
     private void fetchCandidates() {
         Set<ProxyEndpoint> fetched = new LinkedHashSet<>();
-        fetchJson(fetched, "https://proxylist.geonode.com/api/proxy-list?limit=200&page=1&sort_by=lastChecked&sort_type=desc&protocols=http%2Csocks5", ProxyEndpoint.ProxyType.HTTP);
-        fetchRaw(fetched, "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt", ProxyEndpoint.ProxyType.HTTP);
-        fetchRaw(fetched, "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt", ProxyEndpoint.ProxyType.SOCKS5);
+        fetchRaw(fetched, PROXYSCRAPE_HTTP, ProxyEndpoint.ProxyType.HTTP);
+        fetchRaw(fetched, PROXYSCRAPE_SOCKS5, ProxyEndpoint.ProxyType.SOCKS5);
+        fetchRaw(fetched, PROXIFLY_HTTP, ProxyEndpoint.ProxyType.HTTP);
+        fetchRaw(fetched, PROXIFLY_SOCKS5, ProxyEndpoint.ProxyType.SOCKS5);
+        fetchRaw(fetched, MONOSANS_HTTP, ProxyEndpoint.ProxyType.HTTP);
+        fetchRaw(fetched, MONOSANS_SOCKS5, ProxyEndpoint.ProxyType.SOCKS5);
+        fetchRaw(fetched, SPYS_ME, ProxyEndpoint.ProxyType.HTTP);
         candidates.addAll(fetched);
         LOGGER.info("Fetched {} unique public proxy candidate(s)", fetched.size());
     }
@@ -73,23 +79,6 @@ public final class ProxyProvider {
             while (matcher.find()) add(sink, matcher.group(1), matcher.group(2), type);
         } catch (RuntimeException e) {
             LOGGER.debug("Failed to fetch proxy list from {}", url, e);
-        }
-    }
-
-    private void fetchJson(Set<ProxyEndpoint> sink, String url, ProxyEndpoint.ProxyType fallbackType) {
-        try {
-            JsonObject root = JsonParser.parseString(request(url)).getAsJsonObject();
-            JsonArray data = root.has("data") && root.get("data").isJsonArray() ? root.getAsJsonArray("data") : new JsonArray();
-            for (JsonElement element : data) {
-                if (!element.isJsonObject()) continue;
-                JsonObject item = element.getAsJsonObject();
-                String host = string(item, "ip");
-                String port = string(item, "port");
-                ProxyEndpoint.ProxyType type = parseType(item, fallbackType);
-                add(sink, host, port, type);
-            }
-        } catch (RuntimeException e) {
-            LOGGER.debug("Failed to fetch proxy JSON from {}", url, e);
         }
     }
 
@@ -166,13 +155,4 @@ public final class ProxyProvider {
         } catch (NumberFormatException ignored) { }
     }
 
-    private static String string(JsonObject object, String key) { return object.has(key) && !object.get(key).isJsonNull() ? object.get(key).getAsString() : null; }
-
-    private static ProxyEndpoint.ProxyType parseType(JsonObject item, ProxyEndpoint.ProxyType fallback) {
-        if (item.has("protocols") && item.get("protocols").isJsonArray()) {
-            for (JsonElement e : item.getAsJsonArray("protocols")) if ("socks5".equalsIgnoreCase(e.getAsString())) return ProxyEndpoint.ProxyType.SOCKS5;
-        }
-        String protocol = string(item, "protocol");
-        return protocol != null && protocol.toLowerCase(Locale.ROOT).contains("socks5") ? ProxyEndpoint.ProxyType.SOCKS5 : fallback;
-    }
 }
