@@ -18,6 +18,7 @@
 		"ChunkBuilderMixin",
 		"ClientWorldMixin",
 		"ScreenMixin",
-		"MinecraftClientSessionAccessor"
+		"MinecraftClientSessionAccessor",
+		"ClientPlayNetworkHandlerMixin"
 	]
 }
