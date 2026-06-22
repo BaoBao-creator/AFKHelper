@@ -16,9 +16,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class ConnectScreenMixin {
     @Inject(method = "connect", at = @At("HEAD"))
     private static void afkhelper$beginJoinServerConnect(Screen screen, MinecraftClient client, ServerAddress address, ServerInfo info, CallbackInfo ci) {
-        if (BotManager.getInstance().getNextIdentity() != null) {
-            BotProxyContext.beginJoinServerConnect();
-        }
+        BotProxyContext.beginJoinServerConnect(BotManager.getInstance().getNextIdentity());
     }
 
     @Inject(method = "connect", at = @At("RETURN"))

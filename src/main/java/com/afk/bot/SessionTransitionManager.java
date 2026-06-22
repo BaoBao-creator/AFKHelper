@@ -35,7 +35,7 @@ public final class SessionTransitionManager {
     public SessionIdentity setNextOfflineIdentity(String username) {
         SessionIdentity identity = SessionIdentity.offline(username);
         nextIdentity.set(identity);
-        BotProxyContext.markNextJoinAsBot();
+        BotProxyContext.markNextJoinAsBot(identity);
         return identity;
     }
 

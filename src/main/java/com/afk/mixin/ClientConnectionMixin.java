@@ -7,6 +7,7 @@ import com.afk.proxy.ProxyEndpoint;
 import com.afk.proxy.ProxyInjectingChannelInitializer;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelHandler;
+import io.netty.channel.ChannelOption;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.Packet;
 import net.minecraft.network.packet.s2c.play.*;
@@ -28,6 +29,7 @@ public abstract class ClientConnectionMixin {
     )
     private static io.netty.bootstrap.AbstractBootstrap<?, ?> afkhelper$injectProxyHandler(Bootstrap bootstrap, ChannelHandler handler, InetSocketAddress address, boolean useEpoll) {
         Optional<ProxyEndpoint> proxy = BotProxyContext.claimProxyIfBotJoin(address);
+        proxy.ifPresent(endpoint -> bootstrap.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, ProxyInjectingChannelInitializer.PROXY_CONNECT_TIMEOUT_MS));
         return bootstrap.handler(proxy.<ChannelHandler>map(endpoint -> new ProxyInjectingChannelInitializer(handler, endpoint)).orElse(handler));
     }
 
