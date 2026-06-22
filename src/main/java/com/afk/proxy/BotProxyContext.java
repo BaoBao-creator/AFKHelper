@@ -32,9 +32,9 @@ public final class BotProxyContext {
         PendingBotJoin pending = ACTIVE_JOIN_CONNECT.getAndSet(null);
         if (pending == null) return Optional.empty();
 
-        Optional<ProxyEndpoint> proxy = ProxyProvider.getInstance().acquireVerifiedProxy(serverAddress);
+        Optional<ProxyEndpoint> proxy = ProxyProvider.getInstance().getReadyProxy(serverAddress);
         if (proxy.isEmpty()) {
-            String message = "No working proxy could reach " + serverAddress.getHostString() + ":" + serverAddress.getPort() + "; cancelled bot join for " + pending.username() + " to avoid using the same IP.";
+            String message = "No pre-verified proxy is ready for " + serverAddress.getHostString() + ":" + serverAddress.getPort() + "; cancelled bot join quickly for " + pending.username() + " to avoid using the same IP.";
             AutoIpErrorLog.write(message);
             throw new ProxyUnavailableException(message);
         }
