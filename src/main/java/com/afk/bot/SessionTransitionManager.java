@@ -42,7 +42,7 @@ public final class SessionTransitionManager {
             throw new IllegalStateException("MinecraftClient is not available.");
         }
 
-        SessionIdentity identity = setNextOfflineIdentity(username);
+        SessionIdentity identity = SessionIdentity.offline(username);
         overrideClientSession(client, identity);
         client.disconnect(new TitleScreen());
         return identity;
