@@ -62,6 +62,27 @@ public final class AfkClientMod implements ClientModInitializer {
                 ))
         );
 
+
+        ClientCommandManager.DISPATCHER.register(
+            ClientCommandManager.literal("bot")
+                .then(ClientCommandManager.literal("join")
+                    .then(ClientCommandManager.argument("username", StringArgumentType.word())
+                        .executes(context -> com.afk.command.BotCommands.join(
+                            context.getSource(),
+                            StringArgumentType.getString(context, "username")
+                        ))))
+                .then(ClientCommandManager.literal("list")
+                    .executes(context -> com.afk.command.BotCommands.list(context.getSource())))
+                .then(ClientCommandManager.literal("leave")
+                    .then(ClientCommandManager.literal("all")
+                        .executes(context -> com.afk.command.BotCommands.leaveAll(context.getSource())))
+                    .then(ClientCommandManager.argument("username", StringArgumentType.word())
+                        .executes(context -> com.afk.command.BotCommands.leave(
+                            context.getSource(),
+                            StringArgumentType.getString(context, "username")
+                        ))))
+        );
+
         ClientCommandManager.DISPATCHER.register(
             ClientCommandManager.literal("switch")
                 .then(ClientCommandManager.argument("name", StringArgumentType.word())
