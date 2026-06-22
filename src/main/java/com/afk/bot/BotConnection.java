@@ -2,9 +2,8 @@ package com.afk.bot;
 
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.network.ClientConnection;
-import net.minecraft.network.packet.c2s.play.KeepAliveC2SPacket;
-import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
-import net.minecraft.network.packet.c2s.play.TeleportConfirmC2SPacket;
+import net.minecraft.network.Packet;
+import net.minecraft.network.packet.c2s.play.*;
 import net.minecraft.text.LiteralText;
 
 import java.time.Duration;
@@ -28,6 +27,7 @@ public final class BotConnection implements AutoCloseable {
     private final AtomicBoolean closed = new AtomicBoolean(false);
     private final AtomicLong lastKeepAlive = new AtomicLong(System.currentTimeMillis());
     private final KeepAliveManager keepAliveManager;
+    private final BackgroundClientState clientState = new BackgroundClientState();
     private final PacketHandler packetHandler;
     private final ScheduledExecutorService executor;
 
@@ -76,6 +76,7 @@ public final class BotConnection implements AutoCloseable {
                 if (connection != null && connection.isOpen()) {
                     connection.tick();
                     keepAliveManager.tick();
+                    tickBackgroundPlayState();
                 } else {
                     state.compareAndSet(ConnectionState.BACKGROUND, ConnectionState.DISCONNECTED);
                     closeSilently();
@@ -94,6 +95,7 @@ public final class BotConnection implements AutoCloseable {
     public ClientConnection getConnection() { return connection; }
     public ClientPlayNetworkHandler getHandler() { return handler; }
     public PacketHandler getPacketHandler() { return packetHandler; }
+    public BackgroundClientState getClientState() { return clientState; }
     public ConnectionState getState() { return state.get(); }
     public boolean isBackground() { return background.get(); }
     public boolean isOpen() { return !closed.get() && connection != null && connection.isOpen(); }
@@ -101,16 +103,31 @@ public final class BotConnection implements AutoCloseable {
     public long getLastKeepAliveMillis() { return lastKeepAlive.get(); }
     public int getPing() { return handler != null && handler.getPlayerListEntry(identity.uuid()) != null ? handler.getPlayerListEntry(identity.uuid()).getLatency() : -1; }
     public void markKeepAlive() { lastKeepAlive.set(System.currentTimeMillis()); }
-    public void sendKeepAlive(long id) { if (isOpen()) connection.send(new KeepAliveC2SPacket(id)); markKeepAlive(); }
+    public void sendKeepAlive(long id) { sendPacket(new KeepAliveC2SPacket(id)); markKeepAlive(); }
+    public void sendPong(int parameter) { sendPacket(new PlayPongC2SPacket(parameter)); markKeepAlive(); }
+    public void sendResourcePackStatus(ResourcePackStatusC2SPacket.Status status) { sendPacket(new ResourcePackStatusC2SPacket(status)); markKeepAlive(); }
+    public void requestRespawn() { sendPacket(new ClientStatusC2SPacket(ClientStatusC2SPacket.Mode.PERFORM_RESPAWN)); markKeepAlive(); }
 
     public void confirmTeleport(PlayerPositionSnapshot position) {
         if (!isOpen()) return;
-        connection.send(new TeleportConfirmC2SPacket(position.teleportId()));
-        connection.send(new PlayerMoveC2SPacket.Full(position.x(), position.y(), position.z(), position.yaw(), position.pitch(), false));
+        if (position.teleportId() >= 0) sendPacket(new TeleportConfirmC2SPacket(position.teleportId()));
+        sendMovement(position);
+    }
+
+    public void sendMovement(PlayerPositionSnapshot position) {
+        sendPacket(new PlayerMoveC2SPacket.Full(position.x(), position.y(), position.z(), position.yaw(), position.pitch(), position.onGround()));
         markKeepAlive();
     }
 
-    public record PlayerPositionSnapshot(int teleportId, double x, double y, double z, float yaw, float pitch) { }
+    public void sendPacket(Packet<?> packet) { if (isOpen()) connection.send(packet); }
+
+    private void tickBackgroundPlayState() {
+        if (clientState.isJoined() && !clientState.isDead() && clientState.shouldSendMovement(System.currentTimeMillis())) {
+            sendMovement(clientState.movementSnapshot());
+        }
+    }
+
+    public record PlayerPositionSnapshot(int teleportId, double x, double y, double z, float yaw, float pitch, boolean onGround) { }
 
     public void closeSilently() {
         if (closed.compareAndSet(false, true)) {
