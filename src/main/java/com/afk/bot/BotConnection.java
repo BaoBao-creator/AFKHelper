@@ -3,6 +3,8 @@ package com.afk.bot;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.packet.c2s.play.KeepAliveC2SPacket;
+import net.minecraft.network.packet.c2s.play.PlayerMoveC2SPacket;
+import net.minecraft.network.packet.c2s.play.TeleportConfirmC2SPacket;
 import net.minecraft.text.LiteralText;
 
 import java.time.Duration;
@@ -100,6 +102,15 @@ public final class BotConnection implements AutoCloseable {
     public int getPing() { return handler != null && handler.getPlayerListEntry(identity.uuid()) != null ? handler.getPlayerListEntry(identity.uuid()).getLatency() : -1; }
     public void markKeepAlive() { lastKeepAlive.set(System.currentTimeMillis()); }
     public void sendKeepAlive(long id) { if (isOpen()) connection.send(new KeepAliveC2SPacket(id)); markKeepAlive(); }
+
+    public void confirmTeleport(PlayerPositionSnapshot position) {
+        if (!isOpen()) return;
+        connection.send(new TeleportConfirmC2SPacket(position.teleportId()));
+        connection.send(new PlayerMoveC2SPacket.Full(position.x(), position.y(), position.z(), position.yaw(), position.pitch(), false));
+        markKeepAlive();
+    }
+
+    public record PlayerPositionSnapshot(int teleportId, double x, double y, double z, float yaw, float pitch) { }
 
     public void closeSilently() {
         if (closed.compareAndSet(false, true)) {
