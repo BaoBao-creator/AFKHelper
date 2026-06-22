@@ -55,7 +55,9 @@ public final class ProxyProvider {
                 }
             }
         }
-        LOGGER.error("No public proxy passed the fast pre-check or could tunnel to {}:{}; refusing AFK bot join instead of reusing the normal IP.", targetServer.getHostString(), targetServer.getPort());
+        String message = "No public proxy passed the fast pre-check or could tunnel to " + targetServer.getHostString() + ":" + targetServer.getPort() + "; refusing AFK bot join instead of reusing the normal IP.";
+        LOGGER.error(message);
+        AutoIpErrorLog.write(message);
         return Optional.empty();
     }
 
@@ -79,6 +81,7 @@ public final class ProxyProvider {
             while (matcher.find()) add(sink, matcher.group(1), matcher.group(2), type);
         } catch (RuntimeException e) {
             LOGGER.debug("Failed to fetch proxy list from {}", url, e);
+            AutoIpErrorLog.write("Failed to fetch auto IP proxy list from " + url, e);
         }
     }
 
@@ -107,7 +110,10 @@ public final class ProxyProvider {
             return endpoint.type() == ProxyEndpoint.ProxyType.SOCKS5
                     ? verifySocks5Tunnel(socket, targetServer)
                     : verifyHttpConnectTunnel(socket, targetServer);
-        } catch (IOException ignored) { return false; }
+        } catch (IOException e) {
+            AutoIpErrorLog.write("Auto IP proxy " + endpoint.key() + " failed to tunnel to " + targetServer.getHostString() + ":" + targetServer.getPort(), e);
+            return false;
+        }
     }
 
     private static boolean verifyHttpConnectTunnel(Socket socket, InetSocketAddress targetServer) throws IOException {
