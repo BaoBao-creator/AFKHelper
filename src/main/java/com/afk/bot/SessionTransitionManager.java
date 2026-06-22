@@ -37,6 +37,17 @@ public final class SessionTransitionManager {
         return identity;
     }
 
+    public SessionIdentity switchVisibleClientToOffline(MinecraftClient client, String username) {
+        if (client == null) {
+            throw new IllegalStateException("MinecraftClient is not available.");
+        }
+
+        SessionIdentity identity = setNextOfflineIdentity(username);
+        overrideClientSession(client, identity);
+        client.disconnect(new TitleScreen());
+        return identity;
+    }
+
     public BotConnection preserveActiveAndPrepare(MinecraftClient client, String username) {
         if (client == null) {
             throw new IllegalStateException("MinecraftClient is not available.");
