@@ -1,6 +1,7 @@
 package com.afk;
 
-import com.afk.mixin.MinecraftClientSessionAccessor;
+import com.afk.bot.BotManager;
+import com.afk.bot.SessionIdentity;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v1.ClientCommandManager;
@@ -12,15 +13,11 @@ import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.GraphicsMode;
 import net.minecraft.client.option.ParticlesMode;
 import net.minecraft.client.render.ChunkBuilderMode;
-import net.minecraft.client.util.Session;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.text.LiteralText;
 import net.minecraft.text.Text;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Optional;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -105,17 +102,8 @@ public final class AfkClientMod implements ClientModInitializer {
             return 0;
         }
 
-        UUID offlineUuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + username).getBytes(StandardCharsets.UTF_8));
-        Session offlineSession = new Session(
-            username,
-            offlineUuid.toString(),
-            "",
-            Optional.empty(),
-            Optional.empty(),
-            Session.AccountType.LEGACY
-        );
-        ((MinecraftClientSessionAccessor) client).afkhelper$setSession(offlineSession);
-        source.sendFeedback(new LiteralText("Next server join will use cracked account: " + username));
+        SessionIdentity identity = BotManager.getInstance().setNextOfflineIdentity(username);
+        source.sendFeedback(new LiteralText("Stored offline profile internally: " + identity.username() + ". MinecraftClient.session was not changed; reconnect with vanilla UI to keep the real client stable."));
         return 1;
     }
 

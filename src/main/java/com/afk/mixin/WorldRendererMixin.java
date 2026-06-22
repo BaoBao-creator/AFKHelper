@@ -20,7 +20,7 @@ public class WorldRendererMixin {
         if (AfkClientMod.isAfkEnabled()) ci.cancel();
     }
 
-    @Inject(method = {"tick", "reload", "scheduleTerrainUpdate", "drawEntityOutlinesFramebuffer", "tickRainSplashing", "renderClouds", "addParticle", "processGlobalEvent", "processWorldEvent", "setBlockBreakingInfo", "updateNoCullingBlockEntities", "scheduleBlockRenders", "scheduleBlockRender", "scheduleBlockRerenderIfNeeded", "updateBlock", "playSong"}, at = @At("HEAD"), cancellable = true)
+    @Inject(method = {"drawEntityOutlinesFramebuffer", "tickRainSplashing", "renderClouds", "addParticle", "processGlobalEvent", "processWorldEvent", "setBlockBreakingInfo", "scheduleBlockRenders", "scheduleBlockRender", "scheduleBlockRerenderIfNeeded", "playSong"}, at = @At("HEAD"), cancellable = true)
     private void afkhelper$skipRendererWork(CallbackInfo ci) {
         if (AfkClientMod.isAfkEnabled()) ci.cancel();
     }
