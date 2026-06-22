@@ -19,6 +19,10 @@ import java.util.LinkedHashSet;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,51 +31,119 @@ public final class ProxyProvider {
     private static final ProxyProvider INSTANCE = new ProxyProvider();
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(5);
     private static final int VERIFY_TIMEOUT_MS = 3000;
+    private static final int MAX_READY_PROXIES = 16;
     private static final Pattern HOST_PORT = Pattern.compile("(?m)^\\s*([A-Za-z0-9.-]+):(\\d{2,5})(?=\\s|$)");
-    private static final String PROXYSCRAPE_HTTP = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=getproxies&protocol=http&timeout=5000&country=all&ssl=all&anonymity=all";
+
+    // Use one public source only. SOCKS5 is preferred for Minecraft because Netty can tunnel the raw TCP protocol directly.
     private static final String PROXYSCRAPE_SOCKS5 = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=getproxies&protocol=socks5&timeout=5000&country=all&ssl=all&anonymity=all";
-    private static final String PROXIFLY_HTTP = "https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/http/data.txt";
-    private static final String PROXIFLY_SOCKS5 = "https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/socks5/data.txt";
-    private static final String MONOSANS_HTTP = "https://cdn.jsdelivr.net/gh/monosans/proxy-list@main/proxies/http.txt";
-    private static final String MONOSANS_SOCKS5 = "https://cdn.jsdelivr.net/gh/monosans/proxy-list@main/proxies/socks5.txt";
-    private static final String SPYS_ME = "https://spys.me/proxy.txt";
 
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build();
+    private final ExecutorService warmupExecutor = Executors.newSingleThreadExecutor(new WarmupThreadFactory());
     private final Queue<ProxyEndpoint> candidates = new ArrayDeque<>();
+    private final Queue<ProxyEndpoint> ready = new ArrayDeque<>();
     private final Set<String> usedProxyKeys = new LinkedHashSet<>();
+    private final AtomicBoolean warmupRunning = new AtomicBoolean();
+
+    private volatile InetSocketAddress warmupTarget;
 
     public static ProxyProvider getInstance() { return INSTANCE; }
 
-    public synchronized Optional<ProxyEndpoint> acquireVerifiedProxy(InetSocketAddress targetServer) {
-        for (int round = 0; round < 2; round++) {
-            if (candidates.isEmpty()) fetchCandidates();
-            while (!candidates.isEmpty()) {
-                ProxyEndpoint endpoint = candidates.poll();
-                if (usedProxyKeys.contains(endpoint.key())) continue;
-                if (canTunnelToServer(endpoint, targetServer)) {
-                    usedProxyKeys.add(endpoint.key());
-                    LOGGER.info("Using {} proxy {} for AFK bot join to {}:{}", endpoint.type(), endpoint.key(), targetServer.getHostString(), targetServer.getPort());
+    public void startWarmup() {
+        startWarmup(null);
+    }
+
+    public void startWarmup(InetSocketAddress targetServer) {
+        if (targetServer != null) {
+            InetSocketAddress previousTarget = warmupTarget;
+            warmupTarget = targetServer;
+            if (previousTarget != null && !sameTarget(previousTarget, targetServer)) {
+                synchronized (this) {
+                    ready.clear();
+                }
+            }
+        }
+        if (warmupRunning.compareAndSet(false, true)) {
+            warmupExecutor.execute(this::warmupLoop);
+        }
+    }
+
+    public Optional<ProxyEndpoint> getReadyProxy(InetSocketAddress targetServer) {
+        if (targetServer != null) {
+            warmupTarget = targetServer;
+            startWarmup(targetServer);
+        }
+        synchronized (this) {
+            while (!ready.isEmpty()) {
+                ProxyEndpoint endpoint = ready.poll();
+                if (usedProxyKeys.add(endpoint.key())) {
+                    LOGGER.info("Using pre-verified {} proxy {} for AFK bot join to {}:{}", endpoint.type(), endpoint.key(), targetServer.getHostString(), targetServer.getPort());
                     return Optional.of(endpoint);
                 }
             }
         }
-        String message = "No public proxy passed the fast pre-check or could tunnel to " + targetServer.getHostString() + ":" + targetServer.getPort() + "; refusing AFK bot join instead of reusing the normal IP.";
+        String target = targetServer == null ? "the selected server" : targetServer.getHostString() + ":" + targetServer.getPort();
+        String message = "No pre-verified public proxy is ready for " + target + "; refusing AFK bot join instead of blocking on Connecting to server or reusing the normal IP.";
         LOGGER.error(message);
         AutoIpErrorLog.write(message);
         return Optional.empty();
     }
 
-    private void fetchCandidates() {
+    private void warmupLoop() {
+        while (!Thread.currentThread().isInterrupted()) {
+            try {
+                InetSocketAddress target = warmupTarget;
+                if (target == null) {
+                    fetchCandidatesIfNeeded();
+                } else {
+                    fillReadyQueue(target);
+                }
+                Thread.sleep(5000L);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (RuntimeException e) {
+                LOGGER.debug("Auto IP proxy warmup failed", e);
+                AutoIpErrorLog.write("Auto IP proxy warmup failed", e);
+            }
+        }
+    }
+
+    private void fillReadyQueue(InetSocketAddress targetServer) {
+        while (readySize() < MAX_READY_PROXIES) {
+            ProxyEndpoint endpoint = pollCandidate();
+            if (endpoint == null) {
+                fetchCandidatesIfNeeded();
+                endpoint = pollCandidate();
+                if (endpoint == null) return;
+            }
+            if (usedProxyKeys.contains(endpoint.key())) continue;
+            if (canTunnelToServer(endpoint, targetServer)) {
+                String endpointKey = endpoint.key();
+                synchronized (this) {
+                    if (!usedProxyKeys.contains(endpointKey) && ready.stream().noneMatch(existing -> existing.key().equals(endpointKey))) {
+                        ready.add(endpoint);
+                        LOGGER.info("Prepared {} proxy {} for AFK bot joins to {}:{}", endpoint.type(), endpoint.key(), targetServer.getHostString(), targetServer.getPort());
+                    }
+                }
+            }
+        }
+    }
+
+    private synchronized int readySize() { return ready.size(); }
+
+    private synchronized ProxyEndpoint pollCandidate() { return candidates.poll(); }
+
+    private void fetchCandidatesIfNeeded() {
+        synchronized (this) {
+            if (!candidates.isEmpty()) return;
+        }
+
         Set<ProxyEndpoint> fetched = new LinkedHashSet<>();
-        fetchRaw(fetched, PROXYSCRAPE_HTTP, ProxyEndpoint.ProxyType.HTTP);
         fetchRaw(fetched, PROXYSCRAPE_SOCKS5, ProxyEndpoint.ProxyType.SOCKS5);
-        fetchRaw(fetched, PROXIFLY_HTTP, ProxyEndpoint.ProxyType.HTTP);
-        fetchRaw(fetched, PROXIFLY_SOCKS5, ProxyEndpoint.ProxyType.SOCKS5);
-        fetchRaw(fetched, MONOSANS_HTTP, ProxyEndpoint.ProxyType.HTTP);
-        fetchRaw(fetched, MONOSANS_SOCKS5, ProxyEndpoint.ProxyType.SOCKS5);
-        fetchRaw(fetched, SPYS_ME, ProxyEndpoint.ProxyType.HTTP);
-        candidates.addAll(fetched);
-        LOGGER.info("Fetched {} unique public proxy candidate(s)", fetched.size());
+
+        synchronized (this) {
+            candidates.addAll(fetched);
+        }
+        LOGGER.info("Fetched {} unique SOCKS5 proxy candidate(s) from ProxyScrape", fetched.size());
     }
 
     private void fetchRaw(Set<ProxyEndpoint> sink, String url, ProxyEndpoint.ProxyType type) {
@@ -107,27 +179,11 @@ public final class ProxyProvider {
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress(endpoint.host(), endpoint.port()), VERIFY_TIMEOUT_MS);
             socket.setSoTimeout(VERIFY_TIMEOUT_MS);
-            return endpoint.type() == ProxyEndpoint.ProxyType.SOCKS5
-                    ? verifySocks5Tunnel(socket, targetServer)
-                    : verifyHttpConnectTunnel(socket, targetServer);
+            return verifySocks5Tunnel(socket, targetServer);
         } catch (IOException e) {
             AutoIpErrorLog.write("Auto IP proxy " + endpoint.key() + " failed to tunnel to " + targetServer.getHostString() + ":" + targetServer.getPort(), e);
             return false;
         }
-    }
-
-    private static boolean verifyHttpConnectTunnel(Socket socket, InetSocketAddress targetServer) throws IOException {
-        String host = targetServer.getHostString();
-        int port = targetServer.getPort();
-        OutputStream out = socket.getOutputStream();
-        InputStream in = socket.getInputStream();
-        out.write(("CONNECT " + host + ":" + port + " HTTP/1.1\r\nHost: " + host + ":" + port + "\r\nProxy-Connection: Keep-Alive\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
-        out.flush();
-        byte[] buffer = new byte[128];
-        int read = in.read(buffer);
-        if (read <= 0) return false;
-        String status = new String(buffer, 0, read, StandardCharsets.US_ASCII);
-        return status.startsWith("HTTP/1.0 200") || status.startsWith("HTTP/1.1 200");
     }
 
     private static boolean verifySocks5Tunnel(Socket socket, InetSocketAddress targetServer) throws IOException {
@@ -157,6 +213,10 @@ public final class ProxyProvider {
         return header.length == 4 && header[0] == 0x05 && header[1] == 0x00;
     }
 
+    private static boolean sameTarget(InetSocketAddress first, InetSocketAddress second) {
+        return first.getPort() == second.getPort() && first.getHostString().equalsIgnoreCase(second.getHostString());
+    }
+
     private static void add(Set<ProxyEndpoint> sink, String host, String portText, ProxyEndpoint.ProxyType type) {
         if (host == null || host.isBlank() || portText == null) return;
         try {
@@ -165,4 +225,12 @@ public final class ProxyProvider {
         } catch (NumberFormatException ignored) { }
     }
 
+    private static final class WarmupThreadFactory implements ThreadFactory {
+        @Override
+        public Thread newThread(Runnable runnable) {
+            Thread thread = new Thread(runnable, "AFKHelper-ProxyWarmup");
+            thread.setDaemon(true);
+            return thread;
+        }
+    }
 }

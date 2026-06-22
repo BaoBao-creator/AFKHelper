@@ -2,6 +2,7 @@ package com.afk;
 
 import com.afk.bot.BotManager;
 import com.afk.bot.SessionIdentity;
+import com.afk.proxy.ProxyProvider;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v1.ClientCommandManager;
@@ -41,6 +42,8 @@ public final class AfkClientMod implements ClientModInitializer {
 
     @Override
     public void onInitializeClient() {
+        ProxyProvider.getInstance().startWarmup();
+
         ClientCommandManager.DISPATCHER.register(
             ClientCommandManager.literal("afk")
                 .executes(context -> toggleWithFeedback(context.getSource().getClient(), context.getSource()))
