@@ -4,9 +4,7 @@ import com.afk.bot.BotConnection;
 import com.afk.bot.BotManager;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.Packet;
-import net.minecraft.network.packet.s2c.play.DisconnectS2CPacket;
-import net.minecraft.network.packet.s2c.play.KeepAliveS2CPacket;
-import net.minecraft.network.packet.s2c.play.PlayerPositionLookS2CPacket;
+import net.minecraft.network.packet.s2c.play.*;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -25,10 +23,20 @@ public abstract class ClientConnectionMixin {
     private static void route(BotConnection bot, Packet<?> packet) {
         if (packet instanceof KeepAliveS2CPacket keepAlive) {
             bot.getPacketHandler().onKeepAlive(keepAlive);
+        } else if (packet instanceof PlayPingS2CPacket ping) {
+            bot.getPacketHandler().onPlayPing(ping);
+        } else if (packet instanceof ResourcePackSendS2CPacket resourcePack) {
+            bot.getPacketHandler().onResourcePack(resourcePack);
         } else if (packet instanceof DisconnectS2CPacket disconnect) {
             bot.getPacketHandler().onDisconnect(disconnect);
+        } else if (packet instanceof GameJoinS2CPacket gameJoin) {
+            bot.getPacketHandler().onGameJoin(gameJoin);
+        } else if (packet instanceof PlayerRespawnS2CPacket respawn) {
+            bot.getPacketHandler().onPlayerRespawn(respawn);
         } else if (packet instanceof PlayerPositionLookS2CPacket playerPositionLook) {
             bot.getPacketHandler().onPlayerPositionLook(playerPositionLook);
+        } else if (packet instanceof DeathMessageS2CPacket death) {
+            bot.getPacketHandler().onDeath(death);
         } else {
             bot.getPacketHandler().onBackgroundPacket(packet);
         }
