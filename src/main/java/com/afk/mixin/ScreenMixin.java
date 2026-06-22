@@ -11,8 +11,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public class ScreenMixin {
     @Inject(method = {"render", "tick", "renderBackground(Lnet/minecraft/client/util/math/MatrixStack;)V", "renderBackground(Lnet/minecraft/client/util/math/MatrixStack;I)V", "renderBackgroundTexture", "updateNarrator"}, at = @At("HEAD"), cancellable = true)
     private void afkhelper$skipScreenWork(CallbackInfo ci) {
-        if (AfkClientMod.isAfkEnabled() && !AfkClientMod.isAfkScreen((Screen) (Object) this)) {
-            ci.cancel();
-        }
+        if (AfkClientMod.isAfkEnabled()) ci.cancel();
     }
 }

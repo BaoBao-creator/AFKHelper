@@ -5,7 +5,6 @@ import net.fabricmc.fabric.api.client.command.v1.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v1.FabricClientCommandSource;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
 import net.minecraft.client.option.CloudRenderMode;
 import net.minecraft.client.option.GameOptions;
 import net.minecraft.client.option.GraphicsMode;
@@ -20,8 +19,7 @@ import net.minecraft.text.Text;
  * Turns the client into a minimal network keeper while AFK is enabled.
  */
 public final class AfkClientMod implements ClientModInitializer {
-    private static final Text AFK_TITLE = new LiteralText("AFK Mode");
-    private static final Text RETURN_TO_GAME = new LiteralText("Return to Game");
+    private static final Text AFK_TITLE = new LiteralText("");
     private static final Text ENABLED = new LiteralText("AFK network-only mode enabled.");
     private static final Text DISABLED = new LiteralText("AFK network-only mode disabled.");
     private static final EmptyAfkScreen EMPTY_SCREEN = new EmptyAfkScreen();
@@ -58,10 +56,6 @@ public final class AfkClientMod implements ClientModInitializer {
 
     public static boolean isAfkEnabled() {
         return afkEnabled;
-    }
-
-    public static boolean isAfkScreen(Screen screen) {
-        return screen == EMPTY_SCREEN;
     }
 
     private static int toggleWithFeedback(MinecraftClient client, FabricClientCommandSource source) {
@@ -155,20 +149,10 @@ public final class AfkClientMod implements ClientModInitializer {
         @Override
         protected void init() {
             clearChildren();
-            addDrawableChild(new ButtonWidget(
-                width / 2 - 75,
-                height / 2 - 10,
-                150,
-                20,
-                RETURN_TO_GAME,
-                button -> disableAfk(client)
-            ));
         }
 
         @Override
         public void render(MatrixStack matrices, int mouseX, int mouseY, float delta) {
-            fill(matrices, 0, 0, width, height, 0xFF000000);
-            super.render(matrices, mouseX, mouseY, delta);
         }
 
         @Override
