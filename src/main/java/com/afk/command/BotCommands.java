@@ -12,7 +12,7 @@ public final class BotCommands {
     public static int join(FabricClientCommandSource source, String username) {
         try {
             BotConnection connection = BotManager.getInstance().join(source.getClient(), username);
-            source.sendFeedback(new LiteralText("Tracked internal offline bot profile " + connection.getUsername() + ". The active Minecraft client session was not modified."));
+            source.sendFeedback(new LiteralText("Moved " + connection.getUsername() + " to a background connection on " + connection.getServerAddress() + ":" + connection.getServerPort() + "."));
             return 1;
         } catch (RuntimeException e) {
             source.sendError(new LiteralText("/bot join failed: " + e.getMessage()));
