@@ -34,7 +34,9 @@ public final class BotProxyContext {
 
         Optional<ProxyEndpoint> proxy = ProxyProvider.getInstance().acquireVerifiedProxy(serverAddress);
         if (proxy.isEmpty()) {
-            throw new ProxyUnavailableException("No working proxy could reach " + serverAddress.getHostString() + ":" + serverAddress.getPort() + "; cancelled bot join for " + pending.username() + " to avoid using the same IP.");
+            String message = "No working proxy could reach " + serverAddress.getHostString() + ":" + serverAddress.getPort() + "; cancelled bot join for " + pending.username() + " to avoid using the same IP.";
+            AutoIpErrorLog.write(message);
+            throw new ProxyUnavailableException(message);
         }
 
         NEXT_BOT_JOIN.compareAndSet(pending, null);
