@@ -28,7 +28,6 @@ import java.util.regex.Pattern;
 
 public final class ProxyProvider {
     private static final Logger LOGGER = LogManager.getLogger("AFKHelper/ProxyProvider");
-    private static final ProxyProvider INSTANCE = new ProxyProvider();
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(5);
     private static final int VERIFY_TIMEOUT_MS = 3000;
     private static final int MAX_READY_PROXIES = 16;
@@ -36,6 +35,7 @@ public final class ProxyProvider {
 
     // Use one public source only. SOCKS5 is preferred for Minecraft because Netty can tunnel the raw TCP protocol directly.
     private static final String PROXYSCRAPE_SOCKS5 = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=getproxies&protocol=socks5&timeout=5000&country=all&ssl=all&anonymity=all";
+    private static final ProxyProvider INSTANCE = new ProxyProvider();
 
     private final HttpClient httpClient = HttpClient.newBuilder().connectTimeout(HTTP_TIMEOUT).build();
     private final ExecutorService warmupExecutor = Executors.newSingleThreadExecutor(new WarmupThreadFactory());
