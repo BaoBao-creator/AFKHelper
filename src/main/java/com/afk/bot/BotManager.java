@@ -14,6 +14,8 @@ public final class BotManager {
     public SessionIdentity setNextOfflineIdentity(String username) { return transitionManager.setNextOfflineIdentity(username); }
     public Collection<BotConnection> list() { return store.all(); }
     public java.util.Optional<BotConnection> findByHandler(net.minecraft.client.network.ClientPlayNetworkHandler handler) { return store.all().stream().filter(c -> c.getHandler() == handler).findFirst(); }
+    public java.util.Optional<BotConnection> findByConnection(net.minecraft.network.ClientConnection connection) { return store.all().stream().filter(c -> c.getConnection() == connection).findFirst(); }
+    public void remove(BotConnection connection) { store.remove(connection.getUsername()); }
     public boolean leave(String username) { return store.remove(username).map(c -> { c.close(); return true; }).orElse(false); }
     public int leaveAll() { int count = 0; for (BotConnection c : store.all()) { if (store.remove(c.getUsername()).isPresent()) { c.close(); count++; } } return count; }
     public SessionIdentity getNextIdentity() { return transitionManager.getNextIdentity(); }

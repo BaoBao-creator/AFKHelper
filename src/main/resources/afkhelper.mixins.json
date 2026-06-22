@@ -16,6 +16,7 @@
 		"ParticleManagerMixin",
 		"SoundManagerMixin",
 		"ChunkBuilderMixin",
-		"ClientWorldMixin"
+		"ClientWorldMixin",
+		"ClientConnectionMixin"
 	]
 }

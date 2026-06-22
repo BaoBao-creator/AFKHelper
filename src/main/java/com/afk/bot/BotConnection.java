@@ -76,8 +76,7 @@ public final class BotConnection implements AutoCloseable {
                     keepAliveManager.tick();
                 } else {
                     state.compareAndSet(ConnectionState.BACKGROUND, ConnectionState.DISCONNECTED);
-                    connection.handleDisconnection();
-                    close();
+                    closeSilently();
                 }
             } catch (Throwable t) {
                 state.set(ConnectionState.ERROR);
@@ -101,6 +100,13 @@ public final class BotConnection implements AutoCloseable {
     public int getPing() { return handler != null && handler.getPlayerListEntry(identity.uuid()) != null ? handler.getPlayerListEntry(identity.uuid()).getLatency() : -1; }
     public void markKeepAlive() { lastKeepAlive.set(System.currentTimeMillis()); }
     public void sendKeepAlive(long id) { if (isOpen()) connection.send(new KeepAliveC2SPacket(id)); markKeepAlive(); }
+
+    public void closeSilently() {
+        if (closed.compareAndSet(false, true)) {
+            state.set(ConnectionState.DISCONNECTED);
+            executor.shutdownNow();
+        }
+    }
 
     @Override
     public void close() {
