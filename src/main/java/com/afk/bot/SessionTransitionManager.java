@@ -7,6 +7,7 @@ import net.minecraft.client.network.ClientPlayNetworkHandler;
 import net.minecraft.client.network.ServerAddress;
 import net.minecraft.client.network.ServerInfo;
 import net.minecraft.network.ClientConnection;
+import net.minecraft.text.LiteralText;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -43,6 +44,7 @@ public final class SessionTransitionManager {
         }
 
         SessionIdentity identity = SessionIdentity.offline(username);
+        disconnectActiveConnection(client);
         overrideClientSession(client, identity);
         client.disconnect(new TitleScreen());
         return identity;
@@ -89,6 +91,18 @@ public final class SessionTransitionManager {
             return new ServerEndpoint(inetSocketAddress.getHostString(), inetSocketAddress.getPort());
         }
         return new ServerEndpoint(String.valueOf(remote), -1);
+    }
+
+    private static void disconnectActiveConnection(MinecraftClient client) {
+        ClientPlayNetworkHandler handler = client.getNetworkHandler();
+        if (handler == null) {
+            return;
+        }
+
+        ClientConnection connection = handler.getConnection();
+        if (connection != null && connection.isOpen()) {
+            connection.disconnect(new LiteralText("AFKHelper switching account"));
+        }
     }
 
     private static void overrideClientSession(MinecraftClient client, SessionIdentity identity) {
