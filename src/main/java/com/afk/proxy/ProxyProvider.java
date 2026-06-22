@@ -25,9 +25,9 @@ import java.util.regex.Pattern;
 public final class ProxyProvider {
     private static final Logger LOGGER = LogManager.getLogger("AFKHelper/ProxyProvider");
     private static final ProxyProvider INSTANCE = new ProxyProvider();
-    private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(3);
-    private static final int VERIFY_TIMEOUT_MS = 500;
-    private static final Pattern HOST_PORT = Pattern.compile("(?m)([A-Za-z0-9.-]+):(\\d{2,5})");
+    private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(5);
+    private static final int VERIFY_TIMEOUT_MS = 3000;
+    private static final Pattern HOST_PORT = Pattern.compile("(?m)^\\s*([A-Za-z0-9.-]+):(\\d{2,5})(?=\\s|$)");
     private static final String PROXYSCRAPE_HTTP = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=getproxies&protocol=http&timeout=5000&country=all&ssl=all&anonymity=all";
     private static final String PROXYSCRAPE_SOCKS5 = "https://api.proxyscrape.com/v4/free-proxy-list/get?request=getproxies&protocol=socks5&timeout=5000&country=all&ssl=all&anonymity=all";
     private static final String PROXIFLY_HTTP = "https://cdn.jsdelivr.net/gh/proxifly/free-proxy-list@main/proxies/protocols/http/data.txt";
@@ -84,7 +84,11 @@ public final class ProxyProvider {
 
     private String request(String url) {
         try {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(url)).timeout(HTTP_TIMEOUT).GET().build();
+            HttpRequest request = HttpRequest.newBuilder(URI.create(url))
+                    .timeout(HTTP_TIMEOUT)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .GET()
+                    .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) throw new IllegalStateException("HTTP " + response.statusCode());
             return response.body();
