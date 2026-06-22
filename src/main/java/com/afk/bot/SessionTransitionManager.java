@@ -1,8 +1,6 @@
 package com.afk.bot;
 
 import com.afk.mixin.MinecraftClientSessionAccessor;
-import com.afk.proxy.BotProxyContext;
-import com.afk.proxy.ProxyProvider;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.TitleScreen;
 import net.minecraft.client.network.ClientPlayNetworkHandler;
@@ -36,7 +34,6 @@ public final class SessionTransitionManager {
     public SessionIdentity setNextOfflineIdentity(String username) {
         SessionIdentity identity = SessionIdentity.offline(username);
         nextIdentity.set(identity);
-        BotProxyContext.markNextJoinAsBot(identity);
         return identity;
     }
 
@@ -58,9 +55,6 @@ public final class SessionTransitionManager {
         SessionIdentity currentIdentity = SessionIdentity.from(client.getSession());
         SessionIdentity nextOfflineIdentity = setNextOfflineIdentity(username);
         ServerEndpoint endpoint = resolveServerEndpoint(client, connection);
-        if (endpoint.port() > 0) {
-            ProxyProvider.getInstance().startWarmup(new InetSocketAddress(endpoint.host(), endpoint.port()));
-        }
         BotConnection bot = new BotConnection(currentIdentity, endpoint.host(), endpoint.port(), connection, handler);
         if (!store.put(bot)) {
             throw new IllegalStateException(currentIdentity.username() + " is already tracked.");
